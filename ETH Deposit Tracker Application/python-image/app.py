@@ -10,6 +10,8 @@ import logging
 import time
 from requests.exceptions import RequestException, HTTPError
 
+# Telegram API credentials
+# TODO: Move these to environment variables for better security
 TELEGRAM_API_TOKEN = '7229473187:AAEONbOqAKyglszVXwVhlzfCYDzPFYBTjBs'
 TELEGRAM_CHAT_ID = '2125311347'
 
@@ -17,15 +19,6 @@ TELEGRAM_CHAT_ID = '2125311347'
 registry = CollectorRegistry()
 g_deposits = Gauge('new_deposits_total', 'Total number of new deposits', registry=registry)
 
-"""
-def record_deposits(new_deposits):
-    g_deposits.set(len(new_deposits))
-    push_to_gateway(
-            'https://utkarshphy64.grafana.net/api/prom/push',
-            job='deposit_monitor',
-            registry=registry
-        )
-"""
 # Load environment variables
 load_dotenv()
 
@@ -48,7 +41,7 @@ w3 = Web3(Web3.HTTPProvider(RPC_URL))
 # Beacon Deposit Contract address
 BEACON_DEPOSIT_CONTRACT = "0x00000000219ab540356cBB839Cbe05303d7705Fa"
 
-
+# Define Deposit data class
 @dataclass
 class Deposit:
     block_number: int
@@ -57,7 +50,7 @@ class Deposit:
     hash: str
     pubkey: str
 
-
+# Utility function for exponential backoff
 def exponential_backoff(func, retries=5, base_delay=1):
     delay = base_delay
     for attempt in range(retries):
@@ -70,7 +63,7 @@ def exponential_backoff(func, retries=5, base_delay=1):
     logging.error("Max retries reached. Giving up.")
     raise RuntimeError("Max retries reached")
 
-
+# Function to fetch deposit events from the blockchain
 def fetch_deposit_events(current_block, end_block):
     filter_params = {"address": BEACON_DEPOSIT_CONTRACT}
     logging.info(f"Fetching logs from block {current_block} to {end_block} with filter: {filter_params}")
@@ -83,7 +76,7 @@ def fetch_deposit_events(current_block, end_block):
         logging.error(f"Filter params: {filter_params}")
         raise
 
-
+# Main function to monitor deposits
 def monitor_deposits(start_block: int):
     """
     Monitor the Beacon Deposit Contract for new ETH deposits.
@@ -93,48 +86,48 @@ def monitor_deposits(start_block: int):
     while True:
         try:
             latest_block = w3.eth.get_block_number()
-            end_block = min(current_block + 1000, latest_block)  # Increase to 1000 blocks at a time
+            end_block = min(current_block + 1000, latest_block)  # Process up to 1000 blocks at a time
 
             if current_block > latest_block:
                 logging.info("Waiting for new blocks...")
-                time.sleep(30)  # Increase wait time
+                time.sleep(30)  # Wait for 30 seconds before checking again
                 continue
 
             new_deposits = fetch_deposit_events(current_block, end_block)
             if new_deposits:
                 logging.info(f"Found {len(new_deposits)} new deposits.")
-                #record_deposits(new_deposits)
                 save_deposits(new_deposits)
                 notify_new_deposits(new_deposits)
 
             current_block = end_block + 1
         except Exception as e:
             logging.error(f"Error monitoring deposits: {e}", exc_info=True)
-            time.sleep(60)  # Wait longer if there's an error
+            time.sleep(60)  # Wait for 60 seconds if there's an error
         else:
             time.sleep(5)  # Short delay between successful iterations
 
-
+# Function to save deposits (placeholder)
 def save_deposits(deposits: List[Deposit]):
     """
     Save deposit details to a database or file.
     """
     for deposit in deposits:
-        # Save deposit details to a database or file
-        # Implement your saving logic here
+        # TODO: Implement saving logic here
         pass
+
+# Function to decode deposit amount from byte string
 def decode_amount(data):
     """
     Decode the deposit amount from a byte string.
     """
-    # Convert byte string to integer
     return int.from_bytes(data, byteorder='big')
+
+# Function to notify about new deposits
 def notify_new_deposits(new_deposits):
     for deposit in new_deposits:
-        # Ensure you use the correct attribute names
         decoded_data = decode_amount(deposit['data'])
         deposit_info = (
-            f"Block Number: {deposit.blockNumber}\n"  # Corrected the attribute name
+            f"Block Number: {deposit.blockNumber}\n"
             f"Transaction Hash: {deposit.transactionHash}\n"
             f"Deposit Amount: {decoded_data}\n"
         )
@@ -142,6 +135,7 @@ def notify_new_deposits(new_deposits):
         logging.info(deposit_info)
         send_telegram_notification(deposit_info)
 
+# Function to send Telegram notifications
 def send_telegram_notification(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_API_TOKEN}/sendMessage"
     payload = {
@@ -156,6 +150,8 @@ def send_telegram_notification(message):
         logging.error(f"HTTP error occurred: {http_err}")
     except RequestException as err:
         logging.error(f"Error sending Telegram notification: {err}")
+
+# Main execution function
 def main():
     if not w3.is_connected():
         logging.error("Failed to connect to Ethereum network")
@@ -167,7 +163,6 @@ def main():
     send_telegram_notification("ETH Deposit Tracker Starting: - ")
     monitor_deposits(start_block)
 
-
-
+# Entry point of the script
 if __name__ == "__main__":
     main()
