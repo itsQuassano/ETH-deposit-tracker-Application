@@ -107,13 +107,7 @@ def monitor_deposits(start_block: int):
             time.sleep(5)  # Short delay between successful iterations
 
 # Function to save deposits (placeholder)
-def save_deposits(deposits: List[Deposit]):
-    """
-    Save deposit details to a database or file.
-    """
-    for deposit in deposits:
-        # TODO: Implement saving logic here
-        pass
+
 
 # Function to decode deposit amount from byte string
 def decode_amount(data):
